@@ -16,7 +16,7 @@ def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx
     pag.add_edges_from((x, y, { x: Endpoint.CIRCLE, y: Endpoint.CIRCLE }) for x, y in graph.edges())
 
     for x, z, y in getTriples(graph):
-        if z not in sepsets.get((x, y), set()):
+        if not graph.has_edge(x, y) and z not in sepsets.get((x, y), set()):
 
             xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
             yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
@@ -51,8 +51,8 @@ def rule1(pag: nx.Graph, verbose: bool=False) -> bool:
                       f"     and non edge ({x}, {y})\n"
                       f"     =>  {z} -> {y}")
             
-            xzData[z] = Endpoint.TAIL
-            xzData[y] = Endpoint.ARROW
+            yzData[z] = Endpoint.TAIL
+            yzData[y] = Endpoint.ARROW
             hasChange = True
     return hasChange
 
@@ -117,7 +117,7 @@ def rule3(pag: nx.Graph, verbose: bool=False) -> bool:
                           f"     and {z} o-{zvData[v].value} {v}\n"
                           f"     and non edge ({x}, {y})\n"
                           f"     =>  {z} <-{zvData[v].value} {v}")
-                zvData[z] == Endpoint.ARROW
+                zvData[z] = Endpoint.ARROW
                 hasChange = True
     return hasChange
 
