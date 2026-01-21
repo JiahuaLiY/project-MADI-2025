@@ -1,16 +1,9 @@
-import enum
-
 import networkx as nx
 
 from fci.utils import getTriples
-
+from fci.endpoint import Endpoint
 
 #################### Orientations rules ####################
-class Endpoint(enum.Enum):
-    TAIL = ""
-    ARROW = ">"
-    CIRCLE = "o"
-
 def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx.Graph:
     pag = nx.Graph()
     pag.add_edges_from((x, y, { x: Endpoint.CIRCLE, y: Endpoint.CIRCLE }) for x, y in graph.edges())
