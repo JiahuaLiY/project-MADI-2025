@@ -6,7 +6,10 @@ import pyagrum as gum
 from fci.endpoint import Endpoint
 
 #################### skeleton discovery ####################
-def initialSkeleton(learner: gum.BNLearner, alpha: float=0.05, record: bool=False, verbose: bool=False) -> tuple[nx.Graph, dict[tuple, set], list[tuple]]:
+def initialSkeleton(learner: gum.BNLearner,
+                    alpha: float=0.05,
+                    record: bool=False,
+                    verbose: bool=False) -> tuple[nx.Graph, dict[tuple, set], list[tuple]]:
     graph = nx.complete_graph(learner.names())
     sepsets = {}
     adjacents = { x: set(graph.neighbors(x)) for x in graph.nodes }
@@ -40,6 +43,45 @@ def initialSkeleton(learner: gum.BNLearner, alpha: float=0.05, record: bool=Fals
                         print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
         d += 1
     return graph, sepsets, log
+
+def finalSkeleton(learner: gum.BNLearner,
+                  pag: nx.Graph,
+                  sepsets: dict[tuple, set],
+                  alpha: float=0.05,
+                  record: bool=False,
+                  verbose: bool=False) -> list[tuple]:
+    pdseps = { x: getPDSep(pag, x) for x in pag.nodes }
+
+    log = []
+
+    for x, y in list(pag.edges):
+        if not pag.has_edge(x, y):
+            continue
+        
+        d = 0
+        pdsXMinusY = pdseps[x] - {y}
+        done = False
+        while not done and len(pdsXMinusY) > d:
+            for Z in combinations(pdsXMinusY, d):
+                _, pvalue = learner.chi2(x, y, Z)
+
+                if record:
+                    log.append((x, y, Z, pvalue))
+
+                if pvalue >= alpha:
+                    if verbose:
+                        print(f"'{x}' cond ind '{y}' | {Z} with p-value={pvalue} >= {alpha}")
+                    
+                    pag.remove_edge(x, y)
+
+                    sepsets[(x, y)] = sepsets[(y, x)] = sepsets.get((x, y), set()) | {*Z}
+                    done = True
+                    break
+                else:
+                    if verbose:
+                        print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
+            d += 1
+    return log
 
 #################### orientation rules ####################
 def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx.Graph:
@@ -236,3 +278,47 @@ def getTriples(graph: nx.Graph):
     for z in graph.nodes:
         for x, y in combinations(graph.neighbors(z), 2):
             yield x, z, y
+
+def isCollider(pag: nx.Graph, x: str, z: str, y: str) -> bool:
+    # x *-> z <-* y ?
+    return  pag.get_edge_data(x, z)[z] == Endpoint.ARROW and \
+            pag.get_edge_data(y, z)[z] == Endpoint.ARROW
+
+def isTriangle(pag: nx.Graph, x: str, z: str, y: str) -> bool:
+    # x *-* z *-*y; x *-* y ?
+    return pag.has_edge(x, z) and pag.has_edge(z, y) and pag.has_edge(x, y)
+
+def isParent(pag: nx.Graph, x: str, y: str) -> bool:
+    # x -> y ?
+    xyData = pag.get_edge_data(x, y)
+    return xyData[x] == Endpoint.TAIL and xyData[y] == Endpoint.ARROW
+
+def isSpouse(pag: nx.Graph, x: str, y: str) -> bool:
+    # x <-> y ?
+    xyData = pag.get_edge_data(x, y)
+    return xyData[x] == Endpoint.ARROW and xyData[y] == Endpoint.ARROW
+
+def getPDSep(pag: nx.Graph, x: str) -> set:
+    pdsep = set()
+    stack = []
+    visited = set()
+
+    for z in pag.neighbors(x):
+        pdsep.add(z)
+        stack.append((x, z))
+    
+    while stack:
+        edge = stack.pop()
+        if edge in visited:
+            continue
+        visited.add(edge)
+        u, v = edge
+
+        for z in pag.neighbors(v):
+            if z == x or z == u:
+                continue
+
+            if isCollider(pag, u, v, z) or isTriangle(pag, u, v, z):
+                pdsep.add(z)
+                stack.append((v, z))
+    return pdsep
