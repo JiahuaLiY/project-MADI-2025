@@ -1,11 +1,50 @@
-import networkx as nx
+from itertools import combinations
 
-from fci.utils import getTriples
+import networkx as nx
+import pyagrum as gum
+
 from fci.endpoint import Endpoint
 
-#################### Orientations rules ####################
+#################### skeleton discovery ####################
+def initialSkeleton(learner: gum.BNLearner, alpha: float=0.05, record: bool=False, verbose: bool=False) -> tuple[nx.Graph, dict[tuple, set], list[tuple]]:
+    graph = nx.complete_graph(learner.names())
+    sepsets = {}
+    adjacents = { x: set(graph.neighbors(x)) for x in graph.nodes }
+    d = 0
+
+    log = []
+    
+    while max(map(len, adjacents.values())) > d:
+        for x, y in graph.edges:
+            if len(adjacents[x]) - 1 < d:
+                continue
+
+            for Z in combinations(adjacents[x] - {y}, d):
+                _, pvalue = learner.chi2(x, y, Z)
+
+                if record:
+                    log.append((x, y, Z, pvalue))
+
+                if pvalue >= alpha:
+                    if verbose:
+                        print(f"'{x}' cond ind '{y}' | {Z} with p-value={pvalue} >= {alpha}")
+
+                    graph.remove_edge(x, y)
+                    adjacents[x].remove(y)
+                    adjacents[y].remove(x)
+
+                    sepsets[(x, y)] = sepsets[(y, x)] = {*Z}
+                    break
+                else:
+                    if verbose:
+                        print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
+        d += 1
+    return graph, sepsets, log
+
+#################### orientation rules ####################
 def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx.Graph:
     pag = nx.Graph()
+    pag.add_nodes_from(graph.nodes)
     pag.add_edges_from((x, y, { x: Endpoint.CIRCLE, y: Endpoint.CIRCLE }) for x, y in graph.edges())
 
     for x, z, y in getTriples(graph):
@@ -192,4 +231,8 @@ def rule9(pag: nx.Graph, verbose: bool=False) -> bool:
 def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
     ...
 
-############################################################
+#################### auxiliary functions ####################
+def getTriples(graph: nx.Graph):
+    for z in graph.nodes:
+        for x, y in combinations(graph.neighbors(z), 2):
+            yield x, z, y
