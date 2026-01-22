@@ -91,21 +91,22 @@ def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx
     pag.add_nodes_from(graph.nodes)
     pag.add_edges_from((x, y, { x: Endpoint.CIRCLE, y: Endpoint.CIRCLE }) for x, y in graph.edges())
 
-    for x, z, y in getTriples(graph):
-        if not graph.has_edge(x, y) and z not in sepsets.get((x, y), set()):
+    for x, z, y in getTriples(pag):
+        if pag.has_edge(x, y) or z in sepsets.get((x, y), set()):
+            continue
 
-            xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
-            yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
+        xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
+        yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
 
-            if xzData[z] == Endpoint.CIRCLE and yzData[z] == Endpoint.CIRCLE:
-                if verbose:
-                    xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROW  else "<"
-                    print(f"[R0]        '{x}' {xEndpoint}-o '{z}' o-{yzData[y].value} '{y}'\n"
-                          f"            '{z}' not in sepset('{x}', '{y}') = {sepsets.get((x, y), set())}\n"
-                          f"     orient '{x}' {xEndpoint}-> '{z}' <-{yzData[y].value} '{y}'")
-            
-                xzData[z] = Endpoint.ARROW
-                yzData[z] = Endpoint.ARROW
+        if xzData[z] == Endpoint.CIRCLE and yzData[z] == Endpoint.CIRCLE:
+            if verbose:
+                xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROW  else "<"
+                print(f"[R0]        '{x}' {xEndpoint}-o '{z}' o-{yzData[y].value} '{y}'\n"
+                        f"            '{z}' not in sepset('{x}', '{y}') = {sepsets.get((x, y), set())}\n"
+                        f"     orient '{x}' {xEndpoint}-> '{z}' <-{yzData[y].value} '{y}'")
+        
+            xzData[z] = Endpoint.ARROW
+            yzData[z] = Endpoint.ARROW
     return pag
 
 def rule1(pag: nx.Graph, verbose: bool=False) -> bool:
@@ -244,7 +245,8 @@ def rule5(pag: nx.Graph, verbose: bool=False) -> bool:
             continue
 
         # Path : x o-o u o-o ... o-o v o-o y.
-        for path in findUncoveredCirclePath(pag, x, y):
+        for path in getUncoveredCirclePath(pag, x, y):
+            print(path)
             if verbose:
                 print(f"[R5]        '{x}' o-o '{y}'\n"
                       f"            find uncovered circle path = {path}\n"
@@ -333,6 +335,7 @@ def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
 
 #################### auxiliary functions ####################
 def getTriples(graph: nx.Graph):
+    """Return the permutation of all triplets in the graph."""
     for z in graph.nodes:
         for x, y in permutations(graph.neighbors(z), 2):
             yield x, z, y
@@ -356,6 +359,16 @@ def isSpouse(pag: nx.Graph, x: str, y: str) -> bool:
     xyData = pag.get_edge_data(x, y)
     return xyData[x] == Endpoint.ARROW and xyData[y] == Endpoint.ARROW
 
+def hasEndpoint(pag: nx.Graph,
+                x: str,
+                y: str,
+                xEndpoint: Endpoint,
+                yEndpoint: Endpoint) -> bool:
+    if not pag.has_edge(x, y):
+        raise Exception()
+    
+    xyData = pag.get_edge_data(x, y)
+    return xyData[x] == xEndpoint and xyData[y] == yEndpoint
 
 def getPDSep(pag: nx.Graph, x: str) -> set:
     pdsep = set()
@@ -426,35 +439,36 @@ def getDiscriminatingPath(pag: nx.Graph, x: str, z: str, y: str) -> list[str]:
                     
     return None
 
-def findUncoveredCirclePath(pag: nx.Graph, x: str, y: str) -> Generator[list[str], None, None]:
+def getUncoveredCirclePath(pag: nx.Graph, x: str, y: str) -> Generator[list[str], None, None]:
+    path = [x]
+    visited = { u: False for u in pag.nodes }
+    visited[x] = True
     stack = []
-    visited = set()
-    links = { u: None for u in pag.nodes }
-    visited.add(x)
-    
+
     for z in pag.neighbors(x):
-        if  z == y or pag[x][z][x] != Endpoint.CIRCLE or pag[x][z][z] != Endpoint.CIRCLE :
-            continue
-        stack.append((x, z))
-        links[z] = x
+        if z != y and hasEndpoint(pag, x, z, Endpoint.CIRCLE, Endpoint.CIRCLE):
+            stack.append((x, z))
     
     while stack:
         u, v = stack.pop()
-        visited.add(v)
+        while path[-1] != u:
+            visited[path.pop()] = False
+        
+        path.append(v)
+        visited[v] = True
+
+        if v == y:
+            valid = True
+            for i in range(len(path) - 1):
+                ui, vi = path[i], path[i + 1]
+                if not hasEndpoint(pag, ui, vi, Endpoint.CIRCLE, Endpoint.CIRCLE):
+                    valid = False
+                    break
+            if valid:
+                yield path[:]
 
         for w in pag.neighbors(v):
-            if w in visited or pag.has_edge(u, w):
-                continue
-
-            # v o-o w;
-            if pag[v][w][v] == Endpoint.CIRCLE and pag[v][w][w] == Endpoint.CIRCLE:
-                links[w] = v
-                
-                if w == y:
-                    path = reconstructPath(links, w)
-                    if  path[1] != path[-2] and \
-                        not pag.has_edge(path[1], path[-1]) and \
-                        not pag.has_edge(path[0], path[-2]):
-                        yield path
-                else:
-                    stack.append((v, w))
+            if  not visited[w] and \
+                not pag.has_edge(u, w) and \
+                hasEndpoint(pag, v, w, Endpoint.CIRCLE, Endpoint.CIRCLE):
+                stack.append((v, w))
