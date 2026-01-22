@@ -1,5 +1,6 @@
-from itertools import combinations
+from itertools import combinations, permutations
 from collections import deque
+from typing import Generator
 
 import networkx as nx
 import pyagrum as gum
@@ -231,23 +232,45 @@ def rule4(pag: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> bool
                     yzData[y] = Endpoint.ARROW
 
 
+
+
 def rule5(pag: nx.Graph, verbose: bool=False) -> bool:
-    ...
+    hasChange = False
+    for x, y, xyData in pag.edges(data=True):
+        # We assure x o-o y.
+        if xyData[x] != Endpoint.CIRCLE or xyData[y] != Endpoint.CIRCLE:
+            continue
+
+        # Path : x o-o u o-o ... o-o v o-o y.
+        for path in findUncoveredCirclePath(pag, x, y):
+            if verbose:
+                print(f"[R5]        '{x}' o-o '{y}'\n"
+                      f"            find uncovered circle path = {path}\n"
+                      f"     orient '{x}' - '{y}' and '{x}' - ... - '{y}'")
+            hasChange = True
+
+            # Orient x o-o u o-o ... o-o v o-o y as x - u - ... - v - y.
+            for i in range(len(path) - 1):
+                u, v = path[i], path[i + 1]
+                pag[u][v][u] = Endpoint.TAIL
+                pag[u][v][v] = Endpoint.TAIL
+            
+            xyData[x] = Endpoint.TAIL
+            xyData[y] = Endpoint.TAIL
+    return hasChange
 
 def rule6(pag: nx.Graph, verbose: bool=False) -> bool:
     hasChange = False
     for x, z, y in getTriples(pag):
-        xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
-        yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
-
-        # x - z o-* y;
-        # orient z o-* y as z -* y
+        xzData: dict[str, Endpoint] = pag[x][z]
+        yzData: dict[str, Endpoint] = pag[y][z]
+        
         if  xzData[x] == Endpoint.TAIL and xzData[z] == Endpoint.TAIL and \
             yzData[z] == Endpoint.CIRCLE:
-
             if verbose:
-                print(f"[R6]     {x} - {z} o-{yzData[y].value} {y} => {z} -{yzData[y].value} {y}")
-
+                print(f"[R6]        '{x}' - '{z}' o-{yzData[y].value} '{y}'\n"
+                      f"     orient '{z}' -{yzData[y].value} '{y}'")
+            
             yzData[z] = Endpoint.TAIL
             hasChange = True
     return hasChange
@@ -258,22 +281,22 @@ def rule7(pag: nx.Graph, verbose: bool=False) -> bool:
         if pag.has_edge(x, y):
             continue
 
-        xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
-        yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
-
-        # x -o z o-* y;
-        # orient z o-* y as z -* y
+        xzData: dict[str, Endpoint] = pag[x][z]
+        yzData: dict[str, Endpoint] = pag[y][z]
+        
         if  xzData[x] == Endpoint.TAIL and xzData[z] == Endpoint.CIRCLE and \
             yzData[z] == Endpoint.CIRCLE:
-
             if verbose:
-                print(f"[R7]     {x} -o {z} o-{yzData[y].value} {y}\n"
-                      f"     and non edge ({x}, {y})\n"
-                      f"     =>  {z} -{yzData[y].value} {y}")
+                print(f"[R7]        '{x}' -o '{z}' o-{yzData[y].value} '{y}'\n"
+                      f"            '{x}' and '{y}' are not adjacent\n"
+                      f"     orient '{z}' -{yzData[y].value} '{y}'")
             
             yzData[z] = Endpoint.TAIL
             hasChange = True
     return hasChange
+
+
+
 
 def rule8(pag: nx.Graph, verbose: bool=False) -> bool:
     hasChange = False
@@ -309,7 +332,7 @@ def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
 #################### auxiliary functions ####################
 def getTriples(graph: nx.Graph):
     for z in graph.nodes:
-        for x, y in combinations(graph.neighbors(z), 2):
+        for x, y in permutations(graph.neighbors(z), 2):
             yield x, z, y
 
 def isCollider(pag: nx.Graph, x: str, z: str, y: str) -> bool:
@@ -357,16 +380,16 @@ def getPDSep(pag: nx.Graph, x: str) -> set:
                 stack.append((v, z))
     return pdsep
 
-def getDiscriminatingPath(pag: nx.Graph, x: str, z: str, y: str) -> list[str]:
-    def reconstructPath(links: dict[str, str | None], tar: str) -> list[str]:
-        path = [tar]
-        u = tar
-        while links[u] is not None:
-            u = links[u]
-            path.append(u)
-        path.reverse()
-        return path
+def reconstructPath(links: dict[str, str | None], tar: str) -> list[str]:
+    path = [tar]
+    u = tar
+    while links[u] is not None:
+        u = links[u]
+        path.append(u)
+    path.reverse()
+    return path
     
+def getDiscriminatingPath(pag: nx.Graph, x: str, z: str, y: str) -> list[str]:
     queue = deque()
     queue.append(x)
 
@@ -401,3 +424,35 @@ def getDiscriminatingPath(pag: nx.Graph, x: str, z: str, y: str) -> list[str]:
                     
     return None
 
+def findUncoveredCirclePath(pag: nx.Graph, x: str, y: str) -> Generator[list[str], None, None]:
+    stack = []
+    visited = set()
+    links = { u: None for u in pag.nodes }
+    visited.add(x)
+    
+    for z in pag.neighbors(x):
+        if  z == y or pag[x][z][x] != Endpoint.CIRCLE or pag[x][z][z] != Endpoint.CIRCLE :
+            continue
+        stack.append((x, z))
+        links[z] = x
+    
+    while stack:
+        u, v = stack.pop()
+        visited.add(v)
+
+        for w in pag.neighbors(v):
+            if w in visited or pag.has_edge(u, w):
+                continue
+
+            # v o-o w;
+            if pag[v][w][v] == Endpoint.CIRCLE and pag[v][w][w] == Endpoint.CIRCLE:
+                links[w] = v
+                
+                if w == y:
+                    path = reconstructPath(links, w)
+                    if  path[1] != path[-2] and \
+                        not pag.has_edge(path[1], path[-1]) and \
+                        not pag.has_edge(path[0], path[-2]):
+                        yield path
+                else:
+                    stack.append((v, w))
