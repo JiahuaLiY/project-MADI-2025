@@ -4,6 +4,7 @@ from fci.fci import (
     rule0,
     rule1,
     rule2,
-    rule3
+    rule3,
+    rule4
 )
 from fci.dot import toDot

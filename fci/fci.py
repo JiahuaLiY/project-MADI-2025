@@ -1,4 +1,5 @@
 from itertools import combinations
+from collections import deque
 
 import networkx as nx
 import pyagrum as gum
@@ -99,7 +100,9 @@ def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx
 
                 if verbose:
                     xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROW  else "<"
-                    print(f"[R0]     {x} {xEndpoint}-o {z} o-{yzData[y].value} {y} => {x} {xEndpoint}-> {z} <-{yzData[y].value} {y}")
+                    print(f"[R0]    '{x}' {xEndpoint}-o '{z}' o-{yzData[y].value} '{y}'\n"
+                          f"     &  '{z}' not in sepset('{x}', '{y}')={sepsets.get((x, y), set())}\n"
+                          f"     => '{x}' {xEndpoint}-> '{z}' <-{yzData[y].value} '{y}'")
             
                 xzData[z] = Endpoint.ARROW
                 yzData[z] = Endpoint.ARROW
@@ -121,9 +124,9 @@ def rule1(pag: nx.Graph, verbose: bool=False) -> bool:
 
             if verbose:
                 xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROW else "<"
-                print(f"[R1]     {x} {xEndpoint}-> {z} o-{yzData[y].value} {y}\n"
-                      f"     and non edge ({x}, {y})\n"
-                      f"     =>  {z} -> {y}")
+                print(f"[R1]    '{x}' {xEndpoint}-> '{z}' o-{yzData[y].value} '{y}'\n"
+                      f"     &  '{x}' and '{y}' are not adjacent\n"
+                      f"     => '{z}' -> '{y}'")
             
             yzData[z] = Endpoint.TAIL
             yzData[y] = Endpoint.ARROW
@@ -149,9 +152,9 @@ def rule2(pag: nx.Graph, verbose: bool=False) -> bool:
             if verbose:
                 xEndpointFromxz = xzData[x].value if xzData[x] != Endpoint.ARROW else "<"
                 xEndpointFromxy = xyData[x].value if xyData[x] != Endpoint.ARROW else "<"
-                print(f"[R2]     {x} {xEndpointFromxz}-> {z} {yzData[z].value}-{yzData[y].value} {y}\n"
-                      f"     and {x} {xEndpointFromxy}-o {y}\n"
-                      f"     =>  {x} {xEndpointFromxy}-> {y}")
+                print(f"[R2]    '{x}' {xEndpointFromxz}-> '{z}' {yzData[z].value}-{yzData[y].value} '{y}'\n"
+                      f"     &  '{x}' {xEndpointFromxy}-o '{y}'\n"
+                      f"     => '{x}' {xEndpointFromxy}-> '{y}'")
             
             xyData[y] = Endpoint.ARROW
             hasChange = True
@@ -186,17 +189,47 @@ def rule3(pag: nx.Graph, verbose: bool=False) -> bool:
                 if verbose:
                     xEndpointFromxz = xzData[x].value if xzData[x] != Endpoint.ARROW else "<"
                     xEndpointFromxv = xvData[x].value if xvData[x] != Endpoint.ARROW else "<"
-                    print(f"[R3]     {x} {xEndpointFromxz}-> {z} <-{yzData[z].value} {y}\n"
-                          f"     and {x} {xEndpointFromxv}-> {v} <-{yvData[v].value} {y}\n"
-                          f"     and {z} o-{zvData[v].value} {v}\n"
-                          f"     and non edge ({x}, {y})\n"
-                          f"     =>  {z} <-{zvData[v].value} {v}")
+                    print(f"[R3]    '{x}' {xEndpointFromxz}-> '{z}' <-{yzData[z].value} '{y}'\n"
+                          f"     &  '{x}' {xEndpointFromxv}-> '{v}' <-{yvData[v].value} '{y}'\n"
+                          f"     &  '{z}' o-{zvData[v].value} '{v}'\n"
+                          f"     &  '{x}' and '{y}' are not adjacent\n"
+                          f"     => '{z}' <-{zvData[v].value} '{v}'")
                 zvData[z] = Endpoint.ARROW
                 hasChange = True
     return hasChange
 
-def rule4(pag: nx.Graph, verbose: bool=False) -> bool:
-    ...
+def rule4(pag: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> bool:
+    for x, z, y in getTriples(pag):
+        if not pag.has_edge(x, y):
+            continue
+        
+        xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
+        yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
+
+        # x <-* z o-* y; x -> y;
+        if  xzData[x] == Endpoint.ARROW and \
+            yzData[z] == Endpoint.CIRCLE and \
+            isParent(pag, x, y):
+
+            path = getDiscriminatingPath(pag, x, z, y)
+            if path is not None:
+                if verbose:
+                    print(f"[R4]    '{x}' <-{xzData[z].value} '{z}' o-{yzData[y].value} '{y}'\n"
+                          f"     &  '{x}' -> '{y}'\n"
+                          f"     &  find discriminating path : {path}")
+                
+                if z not in sepsets.get((path[-1], y), set()):
+                    if verbose:
+                        print(f"     => '{x}' <-> '{z}' <-> '{y}'")
+                    xzData[z] = Endpoint.ARROW
+                    yzData[z] = Endpoint.ARROW
+                    yzData[y] = Endpoint.ARROW
+                else:
+                    if verbose:
+                        print(f"     => '{z}' -> '{y}'")
+                    yzData[z] = Endpoint.TAIL
+                    yzData[y] = Endpoint.ARROW
+
 
 def rule5(pag: nx.Graph, verbose: bool=False) -> bool:
     ...
@@ -298,6 +331,7 @@ def isSpouse(pag: nx.Graph, x: str, y: str) -> bool:
     xyData = pag.get_edge_data(x, y)
     return xyData[x] == Endpoint.ARROW and xyData[y] == Endpoint.ARROW
 
+
 def getPDSep(pag: nx.Graph, x: str) -> set:
     pdsep = set()
     stack = []
@@ -322,3 +356,48 @@ def getPDSep(pag: nx.Graph, x: str) -> set:
                 pdsep.add(z)
                 stack.append((v, z))
     return pdsep
+
+def getDiscriminatingPath(pag: nx.Graph, x: str, z: str, y: str) -> list[str]:
+    def reconstructPath(links: dict[str, str | None], tar: str) -> list[str]:
+        path = [tar]
+        u = tar
+        while links[u] is not None:
+            u = links[u]
+            path.append(u)
+        path.reverse()
+        return path
+    
+    queue = deque()
+    queue.append(x)
+
+    visited = set(pag.nodes)
+    visited.remove(z)
+    visited.remove(y)
+
+    links = { u: None for u in pag.nodes }
+    links[z] = y
+    links[x] = z
+
+    while queue:
+        u = queue.popleft()
+
+        if u not in visited:
+            continue
+        visited.remove(u)
+
+        for v in pag.neighbors(u):
+            if v == x or v == z or v == y:
+                continue
+
+            if pag.has_edge(v, y):
+                if isParent(pag, v, y) and isSpouse(pag, u, v):
+                    queue.append(v)
+                    links[v] = u
+            else:
+                uvData = pag.get_edge_data(u, v)
+                if uvData[u] == Endpoint.ARROW:
+                    links[v] = u
+                    return reconstructPath(links, v)
+                    
+    return None
+
