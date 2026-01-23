@@ -202,9 +202,9 @@ def initialSkeleton(learner: gum.BNLearner,
 
                     sepsets[(x, y)] = sepsets[(y, x)] = {*Z}
                     break
-                else:
-                    if verbose:
-                        print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
+                # else:
+                #     if verbose:
+                #         print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
         d += 1
     return graph, sepsets, log
 
@@ -241,9 +241,9 @@ def finalSkeleton(learner: gum.BNLearner,
                     sepsets[(x, y)] = sepsets[(y, x)] = sepsets.get((x, y), set()) | {*Z}
                     done = True
                     break
-                else:
-                    if verbose:
-                        print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
+                # else:
+                #     if verbose:
+                #         print(f"'{x}' cond dep '{y}' | {Z} with p-value={pvalue} < {alpha}")
             d += 1
     return log
 
@@ -531,7 +531,7 @@ def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
             filter(lambda z: z != y and isPDEdge(pag, x, z),
                    pag.neighbors(x))
         )
-        # We assume u -> y <- v.
+        # We assure u -> y <- v.
         for u, v in permutations(
             filter(lambda z: isParent(pag, z, y),
                    pag.neighbors(y)), 2
@@ -572,7 +572,7 @@ def fci(learner: gum.BNLearner,
     if skeletonVerbose or ruleVerbose:
         print("\n\n")
     log2 = finalSkeleton(learner, pag, sepsets, alpha=alpha, record=record, verbose=skeletonVerbose)
-    pag = rule0(graph, sepsets, verbose=ruleVerbose)
+    pag = rule0(pag, sepsets, verbose=ruleVerbose)
 
     hasChange = True
     while hasChange:
