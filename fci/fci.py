@@ -498,53 +498,62 @@ def rule8(pag: nx.Graph, verbose: bool=False) -> bool:
     return hasChange
 
 def rule9(pag: nx.Graph, verbose: bool=False) -> bool:
-    hasChange = False
-    for x, y, xyData in pag.edges(data=True):
+    def tryRule9(x: str, y: str) -> bool:
         if not hasEndpoint(pag, x, y, Endpoint.CIRCLE, Endpoint.ARROW):
-            continue
+            return False
 
         for z in pag.neighbors(x):
             if  not pag.has_edge(z, y) and isPDEdge(pag, x, z) and \
                 existUncoveredPDPath(pag, x, y, z):
                     if verbose:
                         print(f"[R9]         '{x}' o-> '{y}'\n"
-                              f"             exist uncovered p.d. path = ('{x}', '{z}', ..., '{y}')\n"
-                              f"      orient '{x}' -> '{y}'")
-                    xyData[x] = Endpoint.TAIL
-                    hasChange = True
-                    break
+                            f"             exist uncovered p.d. path = ('{x}', '{z}', ..., '{y}')\n"
+                            f"      orient '{x}' -> '{y}'")
+                    pag.get_edge_data(x, y)[x] = Endpoint.TAIL
+                    return True
+        return False
+    
+
+    hasChange = False
+    for edge in pag.edges:
+        for x, y in permutations(edge):
+            if tryRule9(x, y):
+                hasChange = True
+                break
     return hasChange
 
 def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
-    hasChange = False
-    for x, y, xyData in pag.edges(data=True):
+    def tryRule10(x: str, y: str) -> bool:
         if not hasEndpoint(pag, x, y, Endpoint.CIRCLE, Endpoint.ARROW):
-            continue
-
-        neighborsXMinusY = set(pag.neighbors(x)) - {y}
-
-        done = False
-        for u, v in permutations(pag.neighbors(y), 2):
-            # We assume u -> y <- v.
-            if  not hasEndpoint(pag, u, y, Endpoint.TAIL, Endpoint.ARROW) or \
-                not hasEndpoint(pag, v, y, Endpoint.TAIL, Endpoint.ARROW):
-                continue
-
-            for uPrime, vPrime in combinations(neighborsXMinusY, 2):
-                if  isPDEdge(pag, x, uPrime) and isPDEdge(pag, x, vPrime) and \
+            return False
+        
+        candidateNeighbors = list(
+            filter(lambda z: z != y and isPDEdge(pag, x, z),
+                   pag.neighbors(x))
+        )
+        # We assume u -> y <- v.
+        for u, v in permutations(
+            filter(lambda z: isParent(pag, z, y),
+                   pag.neighbors(y)), 2
+        ):
+            for uPrime, vPrime in combinations(candidateNeighbors, 2):
+                if  not pag.has_edge(uPrime, vPrime) and \
                     existUncoveredPDPath(pag, x, u, uPrime) and existUncoveredPDPath(pag, x, v, vPrime):
                     if verbose:
                         print(f"[R10]        '{x}' o-> '{y}'\n"
-                              f"             '{u}' -> '{y}' <- '{v}'\n"
-                              f"             exist uncovered p.d. path = ('{x}', '{u}', ..., '{uPrime}')\n"
-                              f"             exist uncovered p.d. path = ('{x}', '{v}', ..., '{vPrime}')\n"
-                              f"      orient '{x}' -> '{y}'")
-                    xyData[x] = Endpoint.TAIL
-                    hasChange = True
+                            f"             '{u}' -> '{y}' <- '{v}'\n"
+                            f"             exist uncovered p.d. path = ('{x}', '{u}', ..., '{uPrime}')\n"
+                            f"             exist uncovered p.d. path = ('{x}', '{v}', ..., '{vPrime}')\n"
+                            f"      orient '{x}' -> '{y}'")
+                    pag.get_edge_data(x, y)[x] = Endpoint.TAIL
+                    return True
+        return False
+    
 
-                    done = True
-                if done:
-                    break
-            if done:
+    hasChange = False
+    for edge in pag.edges:
+        for x, y in permutations(edge):
+            if tryRule10(x, y):
+                hasChange = True
                 break
     return hasChange
