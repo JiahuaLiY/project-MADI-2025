@@ -557,3 +557,37 @@ def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
                 hasChange = True
                 break
     return hasChange
+
+
+
+
+def fci(learner: gum.BNLearner,
+        alpha: float=0.05,
+        record: bool=False,
+        skeletonVerbose: bool=False,
+        ruleVerbose: bool=False) -> tuple[nx.Graph, list]:
+    
+    graph, sepsets, log = initialSkeleton(learner, alpha=alpha, record=record, verbose=skeletonVerbose)
+    pag = rule0(graph, sepsets, verbose=ruleVerbose)
+    if skeletonVerbose or ruleVerbose:
+        print("\n\n")
+    log2 = finalSkeleton(learner, pag, sepsets, alpha=alpha, record=record, verbose=skeletonVerbose)
+    pag = rule0(graph, sepsets, verbose=ruleVerbose)
+
+    hasChange = True
+    while hasChange:
+        hasChange = False
+        hasChange = rule1(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule2(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule3(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule4(pag, sepsets, verbose=ruleVerbose) or hasChange
+
+        hasChange = rule5(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule6(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule7(pag, verbose=ruleVerbose) or hasChange
+
+        hasChange = rule8(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule9(pag, verbose=ruleVerbose) or hasChange
+        hasChange = rule10(pag, verbose=ruleVerbose) or hasChange
+
+    return pag, log + log2

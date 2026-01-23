@@ -1,2 +1,2 @@
 from fci.fci import *
-from fci.dot import toDot
+from fci.utils import toDot, toPDAG
