@@ -10,7 +10,7 @@ def toDot(pag: nx.Graph) -> graphviz.Digraph:
     """"""
     endpointToDotformat = {
         Endpoint.TAIL: "none",
-        Endpoint.ARROW: "normal",
+        Endpoint.ARROWHEAD: "normal",
         Endpoint.CIRCLE: "odot"
     }
 
@@ -39,12 +39,12 @@ def toPDAG(pag: nx.Graph, names: str) -> gum.PDAG:
 
     try:
         for u, v in pag.edges:
-            if hasEndpoint(pag, u, v, Endpoint.ARROW, Endpoint.ARROW):
+            if hasEndpoint(pag, u, v, Endpoint.ARROWHEAD, Endpoint.ARROWHEAD):
                 continue
 
-            if hasEndpoint(pag, u, v, Endpoint.TAIL, Endpoint.ARROW):
+            if hasEndpoint(pag, u, v, Endpoint.TAIL, Endpoint.ARROWHEAD):
                 pdag.addArc(nameToID[u], nameToID[v])
-            elif hasEndpoint(pag, v, u, Endpoint.TAIL, Endpoint.ARROW):
+            elif hasEndpoint(pag, v, u, Endpoint.TAIL, Endpoint.ARROWHEAD):
                 pdag.addArc(nameToID[v], nameToID[u])
             else:
                 pdag.addEdge(nameToID[u], nameToID[v])

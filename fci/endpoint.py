@@ -2,5 +2,5 @@ import enum
 
 class Endpoint(enum.Enum):
     TAIL=""
-    ARROW=">"
+    ARROWHEAD=">"
     CIRCLE="o"

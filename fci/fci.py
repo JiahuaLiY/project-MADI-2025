@@ -25,8 +25,8 @@ def hasEndpoint(pag: nx.Graph,
 
 def isCollider(pag: nx.Graph, x: str, z: str, y: str) -> bool:
     # x *-> z <-* y ?
-    return  pag.get_edge_data(x, z)[z] == Endpoint.ARROW and \
-            pag.get_edge_data(y, z)[z] == Endpoint.ARROW
+    return  pag.get_edge_data(x, z)[z] == Endpoint.ARROWHEAD and \
+            pag.get_edge_data(y, z)[z] == Endpoint.ARROWHEAD
 
 def isTriangle(pag: nx.Graph, x: str, z: str, y: str) -> bool:
     # x *-* z *-*y; x *-* y ?
@@ -34,16 +34,16 @@ def isTriangle(pag: nx.Graph, x: str, z: str, y: str) -> bool:
 
 def isParent(pag: nx.Graph, x: str, y: str) -> bool:
     # Has x -> y ?
-    return hasEndpoint(pag, x, y, Endpoint.TAIL, Endpoint.ARROW)
+    return hasEndpoint(pag, x, y, Endpoint.TAIL, Endpoint.ARROWHEAD)
 
 def isSpouse(pag: nx.Graph, x: str, y: str) -> bool:
     # Has x <-> y ?
-    return hasEndpoint(pag, x, y, Endpoint.ARROW, Endpoint.ARROW)
+    return hasEndpoint(pag, x, y, Endpoint.ARROWHEAD, Endpoint.ARROWHEAD)
 
 def isPDEdge(pag: nx.Graph, x: str, y: str) -> bool:
     xyData = pag.get_edge_data(x, y)
     return  (xyData[x] == Endpoint.CIRCLE or xyData[x] == Endpoint.TAIL) and \
-            (xyData[y] == Endpoint.CIRCLE or xyData[y] == Endpoint.ARROW)
+            (xyData[y] == Endpoint.CIRCLE or xyData[y] == Endpoint.ARROWHEAD)
 
 
 
@@ -111,7 +111,7 @@ def getDiscriminatingPath(pag: nx.Graph, x: str, z: str, y: str) -> list[str]:
                     links[v] = u
             else:
                 uvData = pag.get_edge_data(u, v)
-                if uvData[u] == Endpoint.ARROW:
+                if uvData[u] == Endpoint.ARROWHEAD:
                     links[v] = u
                     return reconstructPath(links, v)
                     
@@ -262,13 +262,13 @@ def rule0(graph: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> nx
 
         if xzData[z] == Endpoint.CIRCLE and yzData[z] == Endpoint.CIRCLE:
             if verbose:
-                xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROW  else "<"
+                xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROWHEAD  else "<"
                 print(f"[R0]         '{x}' {xEndpoint}-o '{z}' o-{yzData[y].value} '{y}'\n"
                         f"             '{z}' not in sepset('{x}', '{y}') = {sepsets.get((x, y), set())}\n"
                         f"      orient '{x}' {xEndpoint}-> '{z}' <-{yzData[y].value} '{y}'")
         
-            xzData[z] = Endpoint.ARROW
-            yzData[z] = Endpoint.ARROW
+            xzData[z] = Endpoint.ARROWHEAD
+            yzData[z] = Endpoint.ARROWHEAD
     return pag
 
 
@@ -285,17 +285,17 @@ def rule1(pag: nx.Graph, verbose: bool=False) -> bool:
 
         # x *-> z o-* y.
         # Orient z o-* y as z -> y.
-        if  xzData[z] == Endpoint.ARROW and \
+        if  xzData[z] == Endpoint.ARROWHEAD and \
             yzData[z] == Endpoint.CIRCLE:
 
             if verbose:
-                xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROW else "<"
+                xEndpoint = xzData[x].value if xzData[x] != Endpoint.ARROWHEAD else "<"
                 print(f"[R1]         '{x}' {xEndpoint}-> '{z}' o-{yzData[y].value} '{y}'\n"
                       f"             '{x}' and '{y}' are not adjacent\n"
                       f"      orient '{z}' -> '{y}'")
             
             yzData[z] = Endpoint.TAIL
-            yzData[y] = Endpoint.ARROW
+            yzData[y] = Endpoint.ARROWHEAD
             hasChange = True
     return hasChange
 
@@ -311,18 +311,18 @@ def rule2(pag: nx.Graph, verbose: bool=False) -> bool:
 
         # x -> z *-> y or x *-> z -> y; and x *-o y.
         # Orient x *-o y as x *-> y.
-        if  ((xzData[x] == Endpoint.TAIL and xzData[z] == Endpoint.ARROW and yzData[y] == Endpoint.ARROW) or \
-            (yzData[z] == Endpoint.TAIL and xzData[z] == Endpoint.ARROW and yzData[y] == Endpoint.ARROW)) and \
+        if  ((xzData[x] == Endpoint.TAIL and xzData[z] == Endpoint.ARROWHEAD and yzData[y] == Endpoint.ARROWHEAD) or \
+            (yzData[z] == Endpoint.TAIL and xzData[z] == Endpoint.ARROWHEAD and yzData[y] == Endpoint.ARROWHEAD)) and \
             xyData[y] == Endpoint.CIRCLE:
 
             if verbose:
-                xEndpointFromxz = xzData[x].value if xzData[x] != Endpoint.ARROW else "<"
-                xEndpointFromxy = xyData[x].value if xyData[x] != Endpoint.ARROW else "<"
+                xEndpointFromxz = xzData[x].value if xzData[x] != Endpoint.ARROWHEAD else "<"
+                xEndpointFromxy = xyData[x].value if xyData[x] != Endpoint.ARROWHEAD else "<"
                 print(f"[R2]         '{x}' {xEndpointFromxz}-> '{z}' {yzData[z].value}-{yzData[y].value} '{y}'\n"
                       f"             '{x}' {xEndpointFromxy}-o '{y}'\n"
                       f"      orient '{x}' {xEndpointFromxy}-> '{y}'")
             
-            xyData[y] = Endpoint.ARROW
+            xyData[y] = Endpoint.ARROWHEAD
             hasChange = True
     return hasChange
 
@@ -335,7 +335,7 @@ def rule3(pag: nx.Graph, verbose: bool=False) -> bool:
         xzData: dict[str, Endpoint] = pag.get_edge_data(x, z)
         yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
 
-        if xzData[z] != Endpoint.ARROW or yzData[z] != Endpoint.ARROW:
+        if xzData[z] != Endpoint.ARROWHEAD or yzData[z] != Endpoint.ARROWHEAD:
             continue
 
         # x *-> z <-* y and x *-o v o-* y and v *-o z.
@@ -353,14 +353,14 @@ def rule3(pag: nx.Graph, verbose: bool=False) -> bool:
                 zvData[z] == Endpoint.CIRCLE:
 
                 if verbose:
-                    xEndpointFromxz = xzData[x].value if xzData[x] != Endpoint.ARROW else "<"
-                    xEndpointFromxv = xvData[x].value if xvData[x] != Endpoint.ARROW else "<"
+                    xEndpointFromxz = xzData[x].value if xzData[x] != Endpoint.ARROWHEAD else "<"
+                    xEndpointFromxv = xvData[x].value if xvData[x] != Endpoint.ARROWHEAD else "<"
                     print(f"[R3]         '{x}' {xEndpointFromxz}-> '{z}' <-{yzData[z].value} '{y}'\n"
                           f"             '{x}' {xEndpointFromxv}-> '{v}' <-{yvData[v].value} '{y}'\n"
                           f"             '{z}' o-{zvData[v].value} '{v}'\n"
                           f"             '{x}' and '{y}' are not adjacent\n"
                           f"      orient '{z}' <-{zvData[v].value} '{v}'")
-                zvData[z] = Endpoint.ARROW
+                zvData[z] = Endpoint.ARROWHEAD
                 hasChange = True
     return hasChange
 
@@ -374,7 +374,7 @@ def rule4(pag: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> bool
         yzData: dict[str, Endpoint] = pag.get_edge_data(y, z)
 
         # x <-* z o-* y and x -> y.
-        if  xzData[x] == Endpoint.ARROW and \
+        if  xzData[x] == Endpoint.ARROWHEAD and \
             yzData[z] == Endpoint.CIRCLE and \
             isParent(pag, x, y):
 
@@ -389,14 +389,14 @@ def rule4(pag: nx.Graph, sepsets: dict[tuple, set], verbose: bool=False) -> bool
                 if z not in sepsets.get((path[-1], y), set()):
                     if verbose:
                         print(f"      orient '{x}' <-> '{z}' <-> '{y}'")
-                    xzData[z] = Endpoint.ARROW
-                    yzData[z] = Endpoint.ARROW
-                    yzData[y] = Endpoint.ARROW
+                    xzData[z] = Endpoint.ARROWHEAD
+                    yzData[z] = Endpoint.ARROWHEAD
+                    yzData[y] = Endpoint.ARROWHEAD
                 else:
                     if verbose:
                         print(f"      orient '{z}' -> '{y}'")
                     yzData[z] = Endpoint.TAIL
-                    yzData[y] = Endpoint.ARROW
+                    yzData[y] = Endpoint.ARROWHEAD
     return hasChange
 
 
@@ -485,9 +485,9 @@ def rule8(pag: nx.Graph, verbose: bool=False) -> bool:
 
         # x -> z -> y or x -o z -> y; and x o-> y.
         # Orient x o-> y as x -> y.
-        if  xzData[x] == Endpoint.TAIL and (xzData[z] ==  Endpoint.ARROW or xzData[z] ==  Endpoint.CIRCLE) and \
-            yzData[z] == Endpoint.TAIL and yzData[y] == Endpoint.ARROW and \
-            xyData[x] == Endpoint.CIRCLE and xyData[y] == Endpoint.ARROW:
+        if  xzData[x] == Endpoint.TAIL and (xzData[z] ==  Endpoint.ARROWHEAD or xzData[z] ==  Endpoint.CIRCLE) and \
+            yzData[z] == Endpoint.TAIL and yzData[y] == Endpoint.ARROWHEAD and \
+            xyData[x] == Endpoint.CIRCLE and xyData[y] == Endpoint.ARROWHEAD:
             if verbose:
                 print(f"[R8]         '{x}' -{xzData[z].value} '{z}' -> '{y}'"
                       f"             '{x}' o-> '{y}'"
@@ -499,7 +499,7 @@ def rule8(pag: nx.Graph, verbose: bool=False) -> bool:
 
 def rule9(pag: nx.Graph, verbose: bool=False) -> bool:
     def tryRule9(x: str, y: str) -> bool:
-        if not hasEndpoint(pag, x, y, Endpoint.CIRCLE, Endpoint.ARROW):
+        if not hasEndpoint(pag, x, y, Endpoint.CIRCLE, Endpoint.ARROWHEAD):
             return False
 
         for z in pag.neighbors(x):
@@ -524,7 +524,7 @@ def rule9(pag: nx.Graph, verbose: bool=False) -> bool:
 
 def rule10(pag: nx.Graph, verbose: bool=False) -> bool:
     def tryRule10(x: str, y: str) -> bool:
-        if not hasEndpoint(pag, x, y, Endpoint.CIRCLE, Endpoint.ARROW):
+        if not hasEndpoint(pag, x, y, Endpoint.CIRCLE, Endpoint.ARROWHEAD):
             return False
         
         candidateNeighbors = list(
