@@ -1,2 +1,2 @@
 from fci.fci import *
-from fci.utils import toDot, toPDAG
+from fci.utils import toDot, showCausalDifferences

@@ -31,23 +31,63 @@ def toDot(pag: nx.Graph) -> graphviz.Digraph:
                  penwidth="1.5")
     return dot
 
-def toPDAG(pag: nx.Graph, names: str) -> gum.PDAG:
+def showCausalDifferences(pag: nx.Graph, pdag: gum.PDAG, names: str) -> graphviz.Digraph:
     nameToID = { name: ID for ID, name in enumerate(names) }
+    edges = set()
+    arcs = set()
 
-    pdag = gum.PDAG()
-    pdag.addNodes(len(names))
-
-    try:
-        for u, v in pag.edges:
-            if hasEndpoint(pag, u, v, Endpoint.ARROWHEAD, Endpoint.ARROWHEAD):
-                continue
-
-            if hasEndpoint(pag, u, v, Endpoint.TAIL, Endpoint.ARROWHEAD):
-                pdag.addArc(nameToID[u], nameToID[v])
-            elif hasEndpoint(pag, v, u, Endpoint.TAIL, Endpoint.ARROWHEAD):
-                pdag.addArc(nameToID[v], nameToID[u])
-            else:
-                pdag.addEdge(nameToID[u], nameToID[v])
-    except gum.InvalidDirectedCycle:
-        return None
-    return pdag
+    dot = graphviz.Digraph(format="svg")
+    dot.attr(rankdir="TB")
+    dot.attr("node", style="filled", fillcolor="gray25", fontcolor="white")
+    # Draw causal graph.
+    for node in pag.nodes:
+        dot.node(node)
+    
+    for u, v in pag.edges:
+        if hasEndpoint(pag, u, v, Endpoint.ARROWHEAD, Endpoint.ARROWHEAD):
+            continue
+        
+        uID, vID = nameToID[u], nameToID[v]
+        if hasEndpoint(pag, u, v, Endpoint.TAIL, Endpoint.ARROWHEAD):
+            arcs.add((uID, vID))
+            dot.edge( u, v,
+                     arrowtail="none",
+                     arrowhead="normal",
+                     dir="both",
+                     penwidth="1.5")
+        elif hasEndpoint(pag, v, u, Endpoint.TAIL, Endpoint.ARROWHEAD):
+            arcs.add((vID, uID))
+            dot.edge(v, u,
+                     arrowtail="none",
+                     arrowhead="normal",
+                     dir="both",
+                     penwidth="1.5")
+        else:
+            edges.add((uID, vID))
+            edges.add((vID, uID))
+            dot.edge(u, v,
+                     arrowtail="none",
+                     arrowhead="none",
+                     dir="both",
+                     penwidth="1.5")
+    
+    # Draw causal differences.
+    for u, v in pdag.edges():
+        if (u, v) not in edges:
+            dot.edge(names[u], names[v],
+                     arrowtail="none",
+                     arrowhead="none",
+                     dir="both",
+                     penwidth="1.5",
+                     color="red",
+                     style="dashed")
+    for u, v in pdag.arcs():
+        if (u, v) not in arcs:
+            dot.edge(names[u], names[v],
+                     arrowtail="none",
+                     arrowhead="normal",
+                     dir="both",
+                     penwidth="1.5",
+                     color="red",
+                     style="dashed")
+    return dot
